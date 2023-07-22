@@ -7,7 +7,12 @@ edition = "2021"
 
 [dependencies]
 lazy_static = "1.4"
+uuid = "1.4.1"
+mime = "0.3.17"
 actix-web = "4.3.1"
+tempfile = "3.1"
+actix-multipart = "0.6.0"
+image = "0.24.6"
 mongodb = "2.0"
 tokio = { version = "1", features = ["full"] }
 dotenv = "0.15.0"
@@ -16,3 +21,5 @@ serde_json = "1"
 bcrypt = "0.15.0"
 regex = "1.5.6"
 validator = { version = "0.16.1", features = ["derive"] }
+sanitize-filename = "0.4.0"
+futures-util = "0.3.28"
