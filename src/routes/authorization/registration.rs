@@ -10,72 +10,86 @@ use cookie::time::Duration;
 use mongodb::{options::InsertOneOptions, Collection, Database};
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::fmt::format;
 use validator::Validate;
+
+use hmac::{Hmac, Mac};
+use jwt::SignWithKey;
+use sha2::Sha256;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ErrorResponse {
-    code: i32,
-    error: String,
+      code: i32,
+      error: String,
 }
 
 pub async fn main(user_dto: web::Json<RegisterDto>) -> impl Responder {
-    let is_valid = user_dto.validate();
+      let is_valid = user_dto.validate();
 
-    if is_valid.is_err() {
-        return HttpResponse::BadRequest().json(is_valid.err());
-    }
-    let RegisterDto {
-        email,
-        full_name,
-        password,
-        username,
-    } = user_dto.into_inner();
+      if is_valid.is_err() {
+            return HttpResponse::BadRequest().json(is_valid.err());
+      }
+      let RegisterDto {
+            email,
+            full_name,
+            password,
+            username,
+      } = user_dto.into_inner();
 
-    let hashed_password = hash_password(&password).expect("Failed to hash password.");
-    let to_store = StoredUserType {
-        bio: None,
-        email: Some(email.to_string()),
-        followers: 0,
-        following: 0,
-        full_name: Some(full_name.to_string()),
-        is_private: false,
-        is_verified: false,
-        password: hashed_password,
-        phone: None,
-        posts: 0,
-        username,
-        website: None,
-        profile_picture: None,
-    };
-    if password.is_empty() {
-        return HttpResponse::BadRequest().body("Missing password.");
-    }
+      let hashed_password = hash_password(&password).expect("Failed to hash password.");
+      let to_store = StoredUserType {
+            bio: None,
+            email: Some(email.to_string()),
+            followers: 0,
+            following: 0,
+            full_name: Some(full_name.to_string()),
+            is_private: false,
+            is_verified: false,
+            password: hashed_password,
+            phone: None,
+            posts: 0,
+            username,
+            website: None,
+            profile_picture: None,
+      };
+      if password.is_empty() {
+            return HttpResponse::BadRequest().body("Missing password.");
+      }
 
-    let db: Database = get_db().await;
+      let db: Database = get_db().await;
 
-    let users_collection_name = &COLLECTION_NAMES.users;
+      let users_collection_name = &COLLECTION_NAMES.users;
 
-    let collection: Collection<StoredUserType> = db.collection(users_collection_name);
-    let insert_options = InsertOneOptions::default();
+      let collection: Collection<StoredUserType> = db.collection(users_collection_name);
+      let insert_options = InsertOneOptions::default();
 
-    let json_data = serde_json::to_value(&to_store).unwrap();
+      let json_data = serde_json::to_value(&to_store).unwrap();
 
-    let backend_uri = &env::var("BACKEND_URI").expect("BACKEND_URI not set");
-    let cookie = Cookie::build("authorization", to_store.password.clone())
-        .domain(backend_uri)
-        .path("/")
-        .secure(true)
-        .http_only(true)
-        .max_age(Duration::days(7))
-        .finish();
-    if let Err(_) = collection.insert_one(to_store, insert_options).await {
-        return HttpResponse::BadRequest().json("error");
-    }
+      let backend_uri = &env::var("BACKEND_URI").expect("BACKEND_URI not set");
+      let jwt_secret = &env::var("JWT_SECRET").expect("JWT_SECRET not set");
 
-    // Фильтрация ключей
-    let filtered_json_data = filter_json(&json_data, &["email"]);
+      let key: Hmac<Sha256> =
+            Hmac::new_from_slice(format!("b\"{}\"", jwt_secret).as_bytes()).unwrap();
+      let mut claims = BTreeMap::new();
+      claims.insert("username", to_store.username.clone());
+      let token_str = claims.sign_with_key(&key).unwrap();
 
-    HttpResponse::Created()
-        .cookie(cookie)
-        .json(serde_json::to_value(&filtered_json_data).unwrap())
+      let cookie = Cookie::build("authorization", format!("Bearer {}", token_str))
+            .domain(backend_uri)
+            .path("/")
+            .secure(true)
+            .http_only(true)
+            .max_age(Duration::days(7))
+            .finish();
+      if let Err(_) = collection.insert_one(to_store, insert_options).await {
+            return HttpResponse::BadRequest().json("error");
+      }
+
+      // Фильтрация ключей
+      let filtered_json_data = filter_json(&json_data, &["email"]);
+
+      HttpResponse::Created()
+            .cookie(cookie)
+            .json(serde_json::to_value(&filtered_json_data).unwrap())
 }
