@@ -2,7 +2,7 @@ use crate::get_db;
 use crate::routes::authorization::password_utils::hash_password;
 use crate::types::collections::COLLECTION_NAMES;
 use crate::types::user::{RegisterDto, StoredUserType};
-use crate::utils::filter_json::filter_json;
+use crate::utils::response::request_response;
 use actix_web::cookie::{self, Cookie};
 use actix_web::{web, HttpResponse, Responder};
 
@@ -10,7 +10,6 @@ use cookie::time::Duration;
 use mongodb::{options::InsertOneOptions, Collection, Database};
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::fmt::format;
 use validator::Validate;
 
 use hmac::{Hmac, Mac};
@@ -54,7 +53,7 @@ pub async fn main(user_dto: web::Json<RegisterDto>) -> impl Responder {
             profile_picture: None,
       };
       if password.is_empty() {
-            return HttpResponse::BadRequest().body("Missing password.");
+            return request_response(true, Some("Missing password".to_string()), None, None);
       }
 
       let db: Database = get_db().await;
@@ -63,8 +62,6 @@ pub async fn main(user_dto: web::Json<RegisterDto>) -> impl Responder {
 
       let collection: Collection<StoredUserType> = db.collection(users_collection_name);
       let insert_options = InsertOneOptions::default();
-
-      let json_data = serde_json::to_value(&to_store).unwrap();
 
       let backend_uri = &env::var("BACKEND_URI").expect("BACKEND_URI not set");
       let jwt_secret = &env::var("JWT_SECRET").expect("JWT_SECRET not set");
@@ -83,13 +80,8 @@ pub async fn main(user_dto: web::Json<RegisterDto>) -> impl Responder {
             .max_age(Duration::days(7))
             .finish();
       if let Err(_) = collection.insert_one(to_store, insert_options).await {
-            return HttpResponse::BadRequest().json("error");
+            return request_response(true, Some("Try later".to_string()), None, None);
       }
 
-      // Фильтрация ключей
-      let filtered_json_data = filter_json(&json_data, &["email"]);
-
-      HttpResponse::Created()
-            .cookie(cookie)
-            .json(serde_json::to_value(&filtered_json_data).unwrap())
+      return request_response(false, Some("ok".to_string()), Some(201), Some(cookie));
 }

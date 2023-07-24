@@ -4,10 +4,7 @@ use actix_web::{
       cookie::{time::Duration, Cookie},
       web, HttpResponse, Responder,
 };
-use mongodb::{
-      bson::{doc, Document},
-      Collection,
-};
+use mongodb::{bson::Document, Collection};
 use validator::Validate;
 
 use crate::{
@@ -16,6 +13,7 @@ use crate::{
             collections::COLLECTION_NAMES,
             user::{LoginDto, StoredUserType},
       },
+      utils::response::request_response,
 };
 
 use super::password_utils::verify_password;
@@ -44,10 +42,12 @@ pub async fn main(user_dto: web::Json<LoginDto>) -> impl Responder {
             Ok(Some(document)) => {
                   let hashed_password = verify_password(&user.password, &document.password);
                   if !hashed_password {
-                        return HttpResponse::BadRequest().json(doc! {
-                            "status": false,
-                            "message": "Error! Password or login doesn't correct"
-                        });
+                        return request_response(
+                              true,
+                              Some("Password or login doesn't correct".to_string()),
+                              Some(400),
+                              None,
+                        );
                   }
                   let backend_uri = &env::var("BACKEND_URI").expect("BACKEND_URI not set");
 
@@ -59,15 +59,16 @@ pub async fn main(user_dto: web::Json<LoginDto>) -> impl Responder {
                         .max_age(Duration::days(7))
                         .finish();
 
-                  HttpResponse::Ok().cookie(cookie).json(doc! {
-                      "status": true
-                  })
+                  request_response(
+                        false,
+                        Some("Successfully logged in".to_string()),
+                        Some(200),
+                        Some(cookie),
+                  )
             }
-            Ok(None) => HttpResponse::BadRequest().json(doc! {
-                "status": false
-            }),
-            Err(_) => HttpResponse::BadRequest().json(doc! {
-                "status": false
-            }),
+            Ok(None) => {
+                  request_response(true, Some("Failed to login".to_string()), Some(403), None)
+            }
+            Err(_) => request_response(true, Some("Failed to login".to_string()), Some(403), None),
       }
 }

@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use serde_json::{json, Map, Value};
 
-pub fn filter_json(json_data: &Value, excluded_keys: &[&str]) -> Value {
+pub fn _filter_json(json_data: &Value, excluded_keys: &[&str]) -> Value {
       let check_hashing = Instant::now();
       if let Value::Object(obj) = json_data {
             let filtered_obj: Map<String, Value> = obj
