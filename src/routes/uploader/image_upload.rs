@@ -8,6 +8,8 @@ use actix_web::{web, HttpRequest, HttpResponse};
 use futures_util::TryStreamExt;
 use uuid::Uuid;
 
+use crate::utils::response::request_response;
+
 pub async fn upload_file(mut payload: Multipart, req: HttpRequest) -> HttpResponse {
       let uploads_folder = "./uploads/images/";
       let thumbnails_folder = "./uploads/thumbnails/";
@@ -21,7 +23,12 @@ pub async fn upload_file(mut payload: Multipart, req: HttpRequest) -> HttpRespon
       };
 
       if content_length == 0 || content_length > max_file_size {
-            HttpResponse::BadRequest().body("hello");
+            return request_response(
+                  true,
+                  Some("Files count more than max upload count(10)".to_string()),
+                  None,
+                  None,
+            );
       }
       let mut current_count = 0;
 
@@ -75,5 +82,5 @@ pub async fn upload_file(mut payload: Multipart, req: HttpRequest) -> HttpRespon
 
             current_count += 1;
       }
-      HttpResponse::Ok().body("Hello")
+      return request_response(false, Some("Files uploaded".to_string()), Some(201), None);
 }

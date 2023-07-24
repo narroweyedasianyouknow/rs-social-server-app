@@ -1,19 +1,17 @@
-use actix_web::{web, HttpRequest, HttpResponse, Responder};
-use hmac::{Hmac, Mac};
+use actix_web::{web, HttpRequest, Responder};
 use mongodb::{bson::Document, options::InsertOneOptions};
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
 use std::time::{SystemTime, UNIX_EPOCH};
-use uuid::Uuid;
 
 use crate::{
       auth,
       db::get_db,
       types::{
             collections::COLLECTION_NAMES,
-            post::{AdditionalItems, MediaItem, MediaTypes, MediumUser, PostCommentUser, PostType},
+            post::{AdditionalItems, MediaItem, MediaTypes, MediumUser, PostType},
             user::StoredUserType,
       },
+      utils::response::request_response,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -25,19 +23,37 @@ pub struct CreatePostRequestBody {
 }
 
 pub async fn main(
-      req: HttpRequest,
+      _req: HttpRequest,
       post_dto: web::Json<CreatePostRequestBody>,
       authentication: auth::BearerMiddleware,
 ) -> impl Responder {
       let CreatePostRequestBody {
             caption,
-            children,
-            media_type,
-            media_url,
+            mut children,
+            mut media_type,
+            mut media_url,
       } = post_dto.into_inner();
 
+      let is_array_of_items = children.is_some();
+      let is_single_item = media_type.is_some();
+
+      if is_single_item && media_url.is_none() {
+            request_response(true, Some("media_url is required".to_string()), None, None);
+      }
+
       if media_type.is_none() && children.is_none() {
-            HttpResponse::BadRequest().json("{ \"error\": \"error\"}");
+            request_response(
+                  true,
+                  Some("media_type or children required".to_string()),
+                  None,
+                  None,
+            );
+      }
+      if is_array_of_items {
+            media_type = None;
+            media_url = None;
+      } else {
+            children = None;
       }
 
       let db = get_db().await;
@@ -88,5 +104,10 @@ pub async fn main(
             .insert_one(to_store, insert_options)
             .await
             .unwrap();
-      HttpResponse::Ok().body("")
+      return request_response(
+            false,
+            Some("Media is uploaded".to_string()),
+            Some(201),
+            None,
+      );
 }

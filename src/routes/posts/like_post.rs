@@ -6,23 +6,19 @@ use crate::{
             post::{MinimalUser, PostType},
             user::StoredUserType,
       },
+      utils::response::request_response,
 };
-use actix_web::HttpResponse;
 use actix_web::{HttpRequest, Responder};
 use mongodb::{
       bson::doc,
       options::{FindOneAndUpdateOptions, FindOneOptions},
 };
 
-pub async fn main(
-      req: HttpRequest,
-      // _: web::Json<actix_web::body::None>,
-      authentication: auth::BearerMiddleware,
-) -> impl Responder {
+pub async fn main(req: HttpRequest, authentication: auth::BearerMiddleware) -> impl Responder {
       let (_path, post_id) = req.path().split_at(6);
 
       if post_id.is_empty() {
-            return HttpResponse::BadRequest().body("");
+            return request_response(true, Some("post_id is required".to_string()), None, None);
       }
       let db = get_db().await;
       let collection: mongodb::Collection<PostType> = db.collection(&COLLECTION_NAMES.post);
@@ -82,5 +78,5 @@ pub async fn main(
                   .find_one_and_update(filter, update, options)
                   .await;
       }
-      HttpResponse::Ok().body("{ \"ok\": true }")
+      return request_response(false, None, None, None);
 }

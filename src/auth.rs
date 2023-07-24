@@ -1,6 +1,6 @@
 use actix_web::error::ErrorUnauthorized;
 use actix_web::{dev::Payload, Error as ActixWebError};
-use actix_web::{http, web, FromRequest};
+use actix_web::{http, FromRequest};
 use core::fmt;
 use hmac::{Hmac, Mac};
 use jwt::VerifyWithKey;
